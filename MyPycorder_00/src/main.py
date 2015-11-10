@@ -58,7 +58,8 @@ __version__ = "1.0.8"
 '''Application Version'''
 
 # show or hide the confirmation dialog box at start up
-ShowConfirmationDialog = True
+#ShowConfirmationDialog = True
+ShowConfirmationDialog = False
 ConfirmationText = u"\
 The PyCorder is based on the Python programming language and is explicitly designed as open source software. \
 The program is provided free of charge under the GNU General Public License (GPL) for open-source \
@@ -142,6 +143,7 @@ from modbase import *
 #from tutorial.tut_2 import TUT_2
 #from tutorial.tut_3 import TUT_3
 #from tutorial.tut_4 import TUT_4
+from tutorial.tut_channelData import printChannelData
 
 
 def InstantiateModules(run_as):
@@ -166,7 +168,7 @@ def InstantiateModules(run_as):
                    TRG_Eeg(),
                    StorageVision(), 
                    FLT_Eeg(), 
-                   #TUT_0(),
+                   printChannelData(),
                    RDA_Server(),
                    IMP_Display(), 
                    DISP_Scope(instance=0)
