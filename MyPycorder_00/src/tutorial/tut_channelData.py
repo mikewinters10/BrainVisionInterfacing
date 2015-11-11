@@ -60,7 +60,7 @@ class printChannelData(ModuleBase):
         self.dataavailable = True       # signal data availability
         self.data = datablock           # get a local reference
         
-        # Using the EEG_DataBlock p. 58 of user manual. Send Channel 5 and the timestamp
+        # Using the EEG_DataBlock p. 58 of user manual. Send Channel 5 and the timestamp.
         print self.data.eeg_channels[5]
         print self.data.block_time
         

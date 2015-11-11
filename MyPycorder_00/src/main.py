@@ -77,7 +77,8 @@ It is possible to deactivate this information page in the source code.\n\
 Please confirm that you accept the conditions of use of the program as stated here by clicking Accept."
 
 # show or hide the battery disconnection reminder
-ShowBatteryReminder = True
+ShowBatteryReminder = False
+#ShowBatteryReminder = True
 
 
 
