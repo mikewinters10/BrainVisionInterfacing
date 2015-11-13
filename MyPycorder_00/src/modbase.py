@@ -41,7 +41,8 @@ import threading
 import copy
 import os, sys, traceback
 from lxml import etree
-from lxml import objectify 
+from lxml import objectify
+import socket 
 
 
 # impedance value invalid (electrode disconnected)

@@ -61,9 +61,21 @@ class printChannelData(ModuleBase):
         self.data = datablock           # get a local reference
         
         # Using the EEG_DataBlock p. 58 of user manual. Send Channel 5 and the timestamp.
-        print self.data.eeg_channels[5]
-        print self.data.block_time
+        # print self.data.eeg_channels[5]
+        # print self.data.block_time
         
+        test = "13"
+        
+        # Sending UDP
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(test,("127.0.0.1",5005))
+        
+        
+        # Receiving UDP
+        # sock.bind(("127.0.0.1", 5005))
+        # while True:
+        #    data, addr = sock.recvfrom(1024) # buffer size is 1024 bytes
+        #   print "received message:", data
     
     def process_output(self):
         ''' Send data out to next module
