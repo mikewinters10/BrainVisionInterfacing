@@ -21,3 +21,6 @@ Notes:
 
 (other)
 *.pyc   in gitignore
+
+
+http://www.mathworks.com/company/newsletters/articles/the-brain-computer-interface-using-matlab-and-simulink-for-biosignal-acquisition-and-processing.html

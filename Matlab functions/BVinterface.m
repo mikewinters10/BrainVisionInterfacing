@@ -54,13 +54,13 @@ function BVinterface_OpeningFcn(hObject, eventdata, handles, varargin)
 
 %%% INITIAL VALUES
 
-handles.blocks = []; % Structure containing data blocks recieved via UDP
+handles.blocks = struct('address',{},'contents',{},'timeStamp',{},'matrix',{}); % Structure containing data blocks recieved via UDP
 handles.matrix = []; % 31xN matrix of channel voltages in time series
 handles.times = []; % Vector contianing the time of each sample in handles.matrix
 handles.record = false; % Variable for continuing to record
 handles.plot = false; % Variable for plotting
 handles.udp.connected = false;
-handles.udp.localPort = 5005; % Make sure this port matches the one in the python code
+handles.udp.localPort = 3000; % Make sure this port matches the one in the python code
 
 % Choose default command line output for BVinterface
 handles.output = hObject;
@@ -102,22 +102,27 @@ end
 
 function record(hObject)
 handles = guidata(hObject);
-flushinput(handles.udp.h); % Flush buffer data for new recording
+%flushinput(handles.udp.h); % Flush buffer data for new recording
+fclose(handles.udp.h)
+fopen(handles.udp.h)
+handles.blocks = struct('address',{},'contents',{},'timeStamp',{},'matrix',{}); % Structure containing data blocks recieved via UDP
+handles.matrix = []; % 31xN matrix of channel voltages in time series
+handles.times = []; % Vector contianing the time of each sample in handles.matrix
 if handles.udp.connected;
 while handles.record
     if get(handles.udp.h, 'BytesAvailable') > 0
         block = fread(handles.udp.h,1);
-        handles.blocks(end+1) = unpackBlock(block); % Do stuff to the block
-		nSamples = size(blocks(end).matrix,2);
-		handles.matrix(1:31,end+1:end+nSamples)=blocks(end).matrix;
+        handles.blocks(end+1) = unpackBlock(block); % Unpack the UDP message
+		nSamples = size(handles.blocks(end).matrix,2);
+		handles.matrix(1:31,end+1:end+nSamples)=handles.blocks(end).matrix;
 		
-		t = handles.blocks(end)-handles.blocks(1).timeStamp;
+		t = handles.blocks(end).timeStamp-handles.blocks(1).timeStamp;
 		if t==0
 			handles.times(1:nSamples) = [0:nSamples-1]./nSamples; % Don't know block period yet
 		elseif length(handles.blocks)==2
 			T = handles.blocks(end).timeStamp-handles.blocks(end-1).timeStamp; % Period of block update
-			handles.times(end+1:end+nSamples) = [0:nSamples-1].*T./nSamples+t;
 			handles.times = handles.times*T; % Adjust the first vector to block period
+            handles.times(end+1:end+nSamples) = [0:nSamples-1].*T./nSamples+t;
 		else
 			T = handles.blocks(end).timeStamp-handles.blocks(end-1).timeStamp; % Period of block update
 			handles.times(end+1:end+nSamples) = [0:nSamples-1].*T./nSamples+t;
@@ -128,7 +133,8 @@ while handles.record
 		end
 		
     end
-    pause(.01)
+    guidata(hObject,handles)
+    pause(.02)
     handles = guidata(hObject);
 end
 end
@@ -155,7 +161,8 @@ end
 
 function toggleRecord_Callback(hObject, ~, handles)
 handles.record = get(hObject,'Value');
-if handles.midiListen
+guidata(hObject,handles)
+if handles.record
     record(hObject)
 end
 end
@@ -164,12 +171,13 @@ end
 function buttonSave_Callback(hObject, ~, handles)
 struc.matrix = handles.matrix;
 struc.times = handles.times;
-save(['data\' datestr(clock,'yy-mm-dd HH:MM:SS')],struc);
+save(['data\' datestr(clock,'yy-mm-dd HH_MM_SS')],'struc');
 end
 
 function buttonPlot_Callback(hObject, ~, handles)
 figure
 hold on
+%plot(handles.times,handles.matrix(1,:),'k')
 for channel = 1:31
 	plot(handles.times,handles.matrix(channel,:),'k')
 end
