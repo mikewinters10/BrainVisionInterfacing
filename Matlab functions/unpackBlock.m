@@ -1,11 +1,9 @@
-function [struc] = unpackBlock(block)
+function [struc] = unpackBlock(block,numChannels)
 % Takes a raw (UDP) data block sent by python OSC from BrainVision and puts the data into a structure containing
 % - The address
 % - The contents list
 % - The time stamp, in miliseconds (converted from H:M:S string)
 % - The voltage matrix, divided into 31 channels and N samples
-
-numChannels = 31;
 
 sblock = char(block);
 [struc.address,sblock] = strtok(sblock,char(0)); % Read until four zeros - this is the address string

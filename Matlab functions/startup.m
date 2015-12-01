@@ -1,1 +1,1 @@
-addpath C:\Users\music\Documents\MATLAB\eeglab13_5_4b
+addpath ..\..\..\MATLAB\eeglab13_5_4b  % This should go up to  c:\Users\<user>\Documents  then back down into \MATLAB\eeglab13_5_4b
