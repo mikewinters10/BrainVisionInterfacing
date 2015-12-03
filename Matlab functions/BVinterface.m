@@ -22,7 +22,7 @@ function varargout = BVinterface(varargin)
 
 % Edit the above text to modify the response to help BVinterface
 
-% Last Modified by GUIDE v2.5 01-Dec-2015 18:54:04
+% Last Modified by GUIDE v2.5 03-Dec-2015 17:48:36
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -80,14 +80,15 @@ h.axesActivity.Title.String = 'Node Activity';
 
 %%% INITIAL VALUES
 h.numChannels = 31; % Hard-coded as 31 channels for specific hardware
+h.colorList = jet(h.numChannels); % Generate a lsit of RGB values for plotting
 h.plotWindow = 1000; % Determines how often maltab will grab new memory space for data, and how wide the channels plot is in time (specified in number of time samples; 25 samples per data block)
 h.T = 1/500; % The sampling period
 h.block = struct('timeStamp',{},'matrix',{}); % Structure containing data blocks recieved via UDP
 h.data.matrix = zeros([h.numChannels h.plotWindow*h.T*5]); % 31xN matrix of channel voltages in time series
 h.data.normMatrix = h.data.matrix;
 h.data.times = zeros([1 h.plotWindow*h.T*5]); % Vector contianing the time of each sample in h.data.matrix
+h.data.valid = false(size(h.data.times)); % Vector specifying whether a time has valid data with it
 h.c = 0;
-h.p = 0;
 h.range = 0.5;
 h.record = false; % Variable for continuing to record
 h.plot = false; % Variable for real-time plotting
@@ -134,31 +135,37 @@ end
 
 function record(hObject)
 	h = guidata(hObject);
+    warning('off','MATLAB:gui:array:InvalidArrayShape');  % Be sure to turn this on if debugging plotting problems
 	fclose(h.udp.h) % Crude way to flush UDP Buffer
 	fopen(h.udp.h)
-	h.data.matrix = zeros([h.numChannels h.plotWindow]); % 31xN matrix of channel voltages in time series
+	h.data.matrix = zeros([h.numChannels h.plotWindow*5]); % 31xN matrix of channel voltages in time series
 	h.data.normMatrix = zeros([h.numChannels h.plotWindow*5]);
 	h.data.times = zeros([1 h.plotWindow*5]); % Vector contianing the time of each sample in h.data.matrix
+    h.data.valid = false(size(h.data.times));
     h.c=0;
-    h.p=0;
+    h.new = false;
     h.range = 0.5;
     cla(h.axesSpectra)
 	cla(h.axesChannels) % Clear plots
 	for channel = 1:h.numChannels   % Initialize line objects for plotting
 		h.l.t(channel) = line(nan,nan,'Parent',h.axesChannels);
 		h.l.f(channel) = line(nan,nan,'Parent',h.axesSpectra);
-	end
-	
+        %h.l.t(channel).Color = h.colorList(channel,:); % rainbow!
+        h.l.f(channel).Color = h.colorList(channel,:); %
+    end
 	if h.udp.connected
 	while h.record
 		while get(h.udp.h, 'BytesAvailable') > 0  % Unpack all pending UDP Messages
 			h = unpack(h); % Unpack the new UDP message, add the data to the array
-            h.data.normMatrix(:,h.c-h.nSamples+1:h.c) = h.data.matrix(:,h.c-h.nSamples+1:h.c) - repmat(mean(h.data.matrix(:,1:h.c),2),[1 h.nSamples]);
+            %h.data.normMatrix(:,h.c-h.nSamples+1:h.c) = h.data.matrix(:,h.c-h.nSamples+1:h.c) - repmat(mean(h.data.matrix(:,1:h.c),2),[1 h.nSamples]);
+            h.data.normMatrix(:,h.c-h.nSamples+1:h.c) = h.data.matrix(:,h.c-h.nSamples+1:h.c) - repmat(mean(h.data.matrix(:,h.data.valid),2),[1 h.nSamples]);
+            h.new = true;
 		end
-		if h.plot % Real time plotting enabled
-             h = updatePlots(hObject,false);
+		if h.plot && h.new % Real time plotting enabled
+             h = updatePlots(h);
+             h.new = false;
 		end
-		drawnow;
+		%drawnow;
 		guidata(hObject,h)
 		pause(.001) % This can be made smaller, if it runs slow on the processing side
 		h = guidata(hObject);
@@ -173,37 +180,51 @@ function h = unpack(h)
     if valid
 	h.nSamples = size(block.matrix,2);
         if (h.c+h.nSamples)>length(h.data.times)  % Allocate another block of memory
-            h.data.matrix(:,end+1:end+h.T) = zeros([h.numChannels h.T*5]);
-            h.data.normMatrix(:,end+1:end+h.T) = zeros([h.numChannels h.T*5]);
-            h.data.times(:,end+1:end+h.T*5) = zeros([1 h.T*5]);
+            h.data.matrix(:,end+1:end+h.plotWindow*5) = zeros([h.numChannels h.plotWindow*5]);
+            h.data.normMatrix(:,end+1:end+h.plotWindow*5) = zeros([h.numChannels h.plotWindow*5]);
+            h.data.times(:,end+1:end+h.plotWindow*5) = zeros([1 h.plotWindow*5]);
         end
-	h.data.matrix(1:31,h.c+1:h.c+h.nSamples)=block.matrix;
 	if h.c==0
         t=0;
         h.ti = block.timeStamp;
     else
         t = block.timeStamp-h.ti;
     end
-	if t==0
-		T = 25*h.T; % guess
-        h.data.times(1:h.nSamples) = [0:h.nSamples-1].*T./h.nSamples; % Don't know block period yet
-	elseif length(block)==2
-		T = block.timeStamp-h.block.timeStamp; % Period of block update
-		h.data.times = h.data.times*T; % Adjust the first vector to block period
-		h.data.times(h.c+1:h.c+h.nSamples) = [0:h.nSamples-1].*T./h.nSamples+t;
-	else
-		T = block.timeStamp-h.block.timeStamp; % Period of block update
-		h.data.times(h.c+1:h.c+h.nSamples) = [0:h.nSamples-1].*T./h.nSamples+t;
-	end
+    
+	if h.c==0
+        h.data.times(1:h.nSamples) = [0:h.nSamples-1].*h.T; % Don't know block period yet
+        h.data.valid(1:h.nSamples) = true;
+	elseif h.c==h.nSamples;
+        h.T = (block.timeStamp-h.block.timeStamp)/h.nSamples; % Confirm sample period
+		h.data.times(1:h.nSamples) = [0:h.nSamples-1].*h.T; % Adjust the first vector to block period
+		h.data.times(h.c+1:h.c+h.nSamples) = [0:h.nSamples-1].*h.T+t;
+        h.data.valid(h.c+1:h.c+h.nSamples) = true;
+    else
+       diff = abs(h.data.times(h.c)+h.T-t);
+        if abs(diff)>0.5*h.T  % some sample(s) have been skipped
+            skipped = round(diff/h.T);
+            h.data.times(h.c+1:h.c+skipped) = (1:skipped)*h.T+h.data.times(h.c);
+            h.c = h.c+skipped;
+        end
+		h.data.times(h.c+1:h.c+h.nSamples) = [0:h.nSamples-1].*h.T+t;
+        h.data.valid(h.c+1:h.c+h.nSamples) = true;
+    end
+    h.data.matrix(1:31,h.c+1:h.c+h.nSamples)=block.matrix;
 	h.c = h.c+h.nSamples;
-    h.block = block;
-    h.T = T/h.nSamples;
+    h.block = block;        
     end
 end
 
-function h = updatePlots(hObject,full)
-h = guidata(hObject);
-switch h.plotWindowabGroup.SelectedTab.Title
+function h = updatePlots(h)
+temp = get(h.listChannels,'Value');
+if any(temp==1)
+	h.plotSel = [1:31];
+elseif any(temp==2)
+	h.plotSel = [];
+else
+	h.plotSel = temp-2;
+end
+switch get(h.plotWindowabGroup.SelectedTab,'Title')
 case {'Channels'} %%% Channels Plot
 	axes(h.axesChannels)
 	temp = max(max(abs(h.data.normMatrix)));
@@ -214,33 +235,29 @@ case {'Channels'} %%% Channels Plot
     h.axesChannels.YTick = (1:length(h.plotSel)).*(h.range);
 	h.axesChannels.YTickLabel = num2str((h.plotSel)');
 	h.plotWindow = str2double(get(h.editWindow,'String'));
-	h.axesChannels.XLim = [0, h.plotWindow*h.T];
-    h.axesChannels.XTick = linspace(0,h.plotWindow*h.T,5);
-	h.axesChannels.XTickLabel = num2str((h.axesChannels.XTick+(h.c-mod(h.c,h.plotWindow))*h.T)');
 
-	counter = 0;
 	if h.c>1
+        if h.c-h.plotWindow < 1
+			start = 1;
+		else
+			start = h.c-h.plotWindow;
+		end
+    set(h.l.t,'XData',h.data.times(start:h.c));
+    set(h.l.t,'YData',-10.*ones(size(h.l.t(1).XData)));
+    h.axesChannels.XLim = [h.l.t(1).XData(1), h.l.t(1).XData(end)];
+    counter = 0;
     for channel = h.plotSel
 		counter = counter+1;
-        %if h.c > h.plotWindow+1 && ~full  % full indicates fully replot data
-        %    h.l.t(channel).YData(h.c-mod(h.c,h.plotwindow)-h.nSamples+1:h.c-mod(h.c,h.plotWindow)) = h.data.normMatrix(channel,h.c-h.nSamples+1:h.c)+counter*h.range;
-		%else
-			if h.c-h.plotWindow < 1
-				start = 1;
-			else
-				start = h.c-h.plotWindow;
-			end
-            h.l.t(channel).XData = h.data.times(start:h.c);
-            h.l.t(channel).YData = h.data.normMatrix(channel,start:h.c)+counter*h.range;
-        %end
-	end
+        h.l.t(channel).YData = h.data.normMatrix(channel,start:h.c)+counter*h.range;
+    end
 	end
 	
 case {'Spectra'} %%% Frequency Plot
 	axes(h.axesSpectra)
-	if h.c > h.plotWindow
+    h.plotWindow = str2double(get(h.editWindow,'String'));
+	if h.c > h.plotWindow && ~isempty(h.plotSel)
         Fs = 1/h.T; % Sampling Frequency
-        h.f = Fs*(0:h.plotWindow/2)/h.plotWindow; % Frequcny list vector
+        f = Fs*(0:h.plotWindow/2)/h.plotWindow; % Frequcny list vector
         for channel = h.plotSel    % Fourier Transfor
             h.Y(channel,:) = fft(h.data.normMatrix(channel,h.c-h.plotWindow:h.c));
         end
@@ -248,11 +265,10 @@ case {'Spectra'} %%% Frequency Plot
         h.Y = h.Y(:,1:h.plotWindow/2+1);
         h.Y(:,2:end-1) = 2*h.Y(:,2:end-1);
         
+        set(h.l.f,'XData',f);
+        set(h.l.f,'YData',zeros(size(f)));
         for channel = h.plotSel
-			if full || isempty(h.l.f(chanel))  % re-do frequency data too
-				h.l.f(channel).XData = h.f;
-			end
-            h.l.f(channel).YData = h.Y;
+            h.l.f(channel).YData = h.Y(channel,:);
 		end
 	end
 	
@@ -272,7 +288,7 @@ function closereq(src,h)
 end
 
 function changeTab(hObject, ~)
-updatePlots(hObject,true);
+updatePlots(guidata(hObject));
 end
 
 function toggleConnect_Callback(hObject, ~, h)
@@ -292,9 +308,9 @@ function toggleRecord_Callback(hObject, ~, h)
 end
 
 function buttonSave_Callback(hObject, ~, h)
-	struc.matrix = h.data.matrix;
-	struc.times = h.data.times;
-	save(['data\' datestr(clock,'yy-mm-dd HH_MM_SS')],'struc');
+struc.matrix = h.data.matrix(h.data.valid); % save only the data/time samples with good data
+struc.times = h.data.times(h.data.valid);
+save(['data\' datestr(clock,'yy-mm-dd HH_MM_SS')],'struc');
 end
 
 function buttonTest_Callback(hObject, ~, h)
@@ -312,45 +328,41 @@ function togglePlot_Callback(hObject, ~, h)
 	end
 end
 
-function listChannels_Callback(hObject, eventdata, h)
-temp = get(hObject,'Value');
-if any(temp==1)
-	h.plotSel = [1:31];
-elseif any(temp==2)
-	h.plotSel = [];
-else
-	h.plotSel = temp-2;
-end
-guidata(hObject,h)
-h = updatePlots(hObject,true);
+function listChannels_Callback(hObject, ~, h)
+h = updatePlots(h);
 end
 
-function editWindow_Callback(hObject, ~, ~)
-updatePlots(hObject,true);
+function editWindow_Callback(hObject, ~, h)
+updatePlots(h);
 end
+
+function sliderWindow_Callback(hObject, ~, h)
+set(h.editWindow,'Value',round(5000*get(hObject,'Value'))+1);
+set(h.editWindow,'String',num2str(round(5000*get(hObject,'Value'))+1));
+h.plotWindow = round(5000*get(hObject,'Value'))+1;
+drawnow;
+h = updatePlots(h);
+end
+
 
 % --- Executes during object creation, after setting all properties.
 function listChannels_CreateFcn(hObject, eventdata, h)
-% hObject    handle to listChannels (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% h    empty - h not created until after all CreateFcns called
-
-% Hint: listbox controls usually have a white background on Windows.
-%       See ISPC and COMPUTER.
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
 end
-
-% --- Executes during object creation, after setting all properties.
 function editWindow_CreateFcn(hObject, eventdata, h)
-% hObject    handle to editWindow (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% h    empty - h not created until after all CreateFcns called
-
-% Hint: edit controls usually have a white background on Windows.
-%       See ISPC and COMPUTER.
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
+end
+end
+function sliderWindow_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to sliderWindow (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: slider controls usually have a light gray background.
+if isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor',[.9 .9 .9]);
 end
 end
