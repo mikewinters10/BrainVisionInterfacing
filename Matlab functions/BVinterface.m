@@ -151,12 +151,12 @@ function record(hObject)
 	
 	if h.udp.connected
 	while h.record
-		if get(h.udp.h, 'BytesAvailable') > 0
+		while get(h.udp.h, 'BytesAvailable') > 0  % Unpack all pending UDP Messages
 			h = unpack(h); % Unpack the new UDP message, add the data to the array
             h.data.normMatrix(:,h.c-h.nSamples+1:h.c) = h.data.matrix(:,h.c-h.nSamples+1:h.c) - repmat(mean(h.data.matrix(:,1:h.c),2),[1 h.nSamples]);
-			if h.plot % Real time plotting
-                h = updatePlots(hObject,false);
-			end
+		end
+		if h.plot % Real time plotting enabled
+             h = updatePlots(hObject,false);
 		end
 		drawnow;
 		guidata(hObject,h)
@@ -216,14 +216,15 @@ case {'Channels'} %%% Channels Plot
 	h.plotWindow = str2double(get(h.editWindow,'String'));
 	h.axesChannels.XLim = [0, h.plotWindow*h.T];
     h.axesChannels.XTick = linspace(0,h.plotWindow*h.T,5);
+	h.axesChannels.XTickLabel = num2str((h.axesChannels.XTick+(h.c-mod(h.c,h.plotWindow))*h.T)');
 
 	counter = 0;
 	if h.c>1
     for channel = h.plotSel
 		counter = counter+1;
-        if h.c > h.plotWindow+1 && ~full  % full referes to full replot
-            h.l.t(channel).YData(h.c-mod(h.c,h.T)-h.nSamples+1:h.c-mod(h.c,h.T)) = h.data.normMatrix(channel,h.c-h.nSamples+1:h.c)+counter*h.range;
-		else
+        %if h.c > h.plotWindow+1 && ~full  % full indicates fully replot data
+        %    h.l.t(channel).YData(h.c-mod(h.c,h.plotwindow)-h.nSamples+1:h.c-mod(h.c,h.plotWindow)) = h.data.normMatrix(channel,h.c-h.nSamples+1:h.c)+counter*h.range;
+		%else
 			if h.c-h.plotWindow < 1
 				start = 1;
 			else
@@ -231,7 +232,7 @@ case {'Channels'} %%% Channels Plot
 			end
             h.l.t(channel).XData = h.data.times(start:h.c);
             h.l.t(channel).YData = h.data.normMatrix(channel,start:h.c)+counter*h.range;
-        end
+        %end
 	end
 	end
 	
