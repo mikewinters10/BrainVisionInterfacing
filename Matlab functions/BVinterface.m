@@ -259,7 +259,8 @@ case {'Spectra'} %%% Frequency Plot
         Fs = 1/h.T; % Sampling Frequency
         f = Fs*(0:h.plotWindow/2)/h.plotWindow; % Frequcny list vector
         for channel = h.plotSel    % Fourier Transfor
-            h.Y(channel,:) = fft(h.data.normMatrix(channel,h.c-h.plotWindow:h.c));
+            Y = fft(h.data.normMatrix(channel,h.c-h.plotWindow:h.c));
+            h.Y(channel,1:numel(Y)) = Y;
         end
         h.Y = abs(h.Y./h.plotWindow);  % Make one-sided, real
         h.Y = h.Y(:,1:h.plotWindow/2+1);
