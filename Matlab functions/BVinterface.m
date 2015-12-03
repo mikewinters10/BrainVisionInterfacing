@@ -54,13 +54,13 @@ function BVinterface_OpeningFcn(hObject, eventdata, handles, varargin)
 
 %%% Add Tabs, since matlab doesn't have this in the GUIDE editor
 handles.plotSel = [1:31];
-handles.tabGroup = uitabgroup('Parent',handles.panelPlots); % next try making it's parent a pannel
-handles.tabs(1) = uitab('Parent',handles.tabGroup, 'Title','Channels');
-handles.tabs(2) = uitab('Parent',handles.tabGroup, 'Title','Spectra');
-handles.tabs(3) = uitab('Parent',handles.tabGroup, 'Title','Activity Distribution');
-set(handles.tabGroup, 'SelectedTab',handles.tabs(1));
+handles.plotWindowabGroup = uitabgroup('Parent',handles.panelPlots); % next try making it's parent a pannel
+handles.plotWindowabs(1) = uitab('Parent',handles.plotWindowabGroup, 'Title','Channels');
+handles.plotWindowabs(2) = uitab('Parent',handles.plotWindowabGroup, 'Title','Spectra');
+handles.plotWindowabs(3) = uitab('Parent',handles.plotWindowabGroup, 'Title','Activity Distribution');
+set(handles.plotWindowabGroup, 'SelectedTab',handles.plotWindowabs(1));
 
-handles.axesChannels = axes('Parent',handles.tabs(1));
+handles.axesChannels = axes('Parent',handles.plotWindowabs(1));
 handles.axesChannels.XLabel.String = 'Time (s)';
 handles.axesChannels.YLabel.String = 'Channel';  % figure out units at some point
 handles.axesChannels.Title.String = 'Relative Channel Voltages';
@@ -68,25 +68,28 @@ handles.axesChannels.YLim				= [0, (length(handles.plotSel)+1)];
 handles.axesChannels.YTick				= (1:length(handles.plotSel));
 handles.axesChannels.YTickLabel			= num2str((handles.plotSel)');
 
-handles.axesSpectra = axes('Parent',handles.tabs(2));
+handles.axesSpectra = axes('Parent',handles.plotWindowabs(2));
 handles.axesSpectra.XLabel.String = 'Frequency (Hz)';
 handles.axesSpectra.YLabel.String = 'Intensity';
 handles.axesSpectra.Title.String = 'Frequency Spectrum';
 
-handles.axesActivity = axes('Parent',handles.tabs(3));
+handles.axesActivity = axes('Parent',handles.plotWindowabs(3));
 handles.axesActivity.Title.String = 'Node Activity';
 
 
 %%% INITIAL VALUES
 handles.plotSel = [1:31];
+handles.debug = false;
 handles.numChannels = 31; % Hard-coded as 31 channels for specific hardware
-handles.T = 100*25; % Determines how often maltab will grab new memory space for data, and how wide the channels plot is in time (specified in number of time samples; 25 samples per data block)
-handles.blocks = struct('address',{},'contents',{},'timeStamp',{},'matrix',{}); % Structure containing data blocks recieved via UDP
-handles.data.matrix = zeros([handles.numChannels handles.T]); % 31xN matrix of channel voltages in time series
+handles.plotWindow = 5; % Determines how often maltab will grab new memory space for data, and how wide the channels plot is in time (specified in number of time samples; 25 samples per data block)
+handles.freq = 1000; % Default, may be different
+handles.block = struct('timeStamp',{},'matrix',{}); % Structure containing data blocks recieved via UDP
+handles.data.matrix = zeros([handles.numChannels round(handles.plotWindow*handles.freq*5)]); % 31xN matrix of channel voltages in time series
 handles.data.normMatrix = handles.data.matrix;
-handles.data.times = zeros([1 handles.T]); % Vector contianing the time of each sample in handles.data.matrix
-handles.data.sampleNum = 0; % Number of voltage samples processed so far
+handles.data.times = zeros([1 round(handles.plotWindow*handles.freq*5)]); % Vector contianing the time of each sample in handles.data.matrix
 handles.c = 0;
+handles.p = 0;
+handles.range = 0.5;
 handles.record = false; % Variable for continuing to record
 handles.plot = false; % Variable for real-time plotting
 handles.udp.connected = false;
@@ -135,27 +138,42 @@ function record(hObject)
 	%flushinput(handles.udp.h); % Flush buffer data for new recording; doesn't work
 	fclose(handles.udp.h) % Bad way to flush the buffer; works
 	fopen(handles.udp.h)
-	handles.blocks = struct('address',{},'contents',{},'timeStamp',{},'matrix',{}); % Structure containing data blocks recieved via UDP
-	handles.data.matrix = zeros([handles.numChannels handles.T]); % 31xN matrix of channel voltages in time series
-	handles.data.normMatrix = zeros([handles.numChannels handles.T]);
-	handles.data.times = zeros([1 handles.T]); % Vector contianing the time of each sample in handles.data.matrix
-	handles.data.sampleNum = 0; 
+	handles.data.matrix = zeros([handles.numChannels handles.plotWindow]); % 31xN matrix of channel voltages in time series
+	handles.data.normMatrix = zeros([handles.numChannels handles.plotWindow]);
+	handles.data.times = zeros([1 handles.plotWindow]); % Vector contianing the time of each sample in handles.data.matrix
+    handles.c=0;
+    handles.p=0;
+    handles.range = 0.5;
+    handles.plotHandles = [];
+    axes(handles.axesChannels)
+	cla(handles.axesChannels) % Clear plot
 	
 	if handles.udp.connected
 	while handles.record
 		if get(handles.udp.h, 'BytesAvailable') > 0
+            tic
+            if handles.c > handles.plotWindow
+                handles.debug = true;
+            end
+            
 			handles = unpack(handles); % Unpack the new UDP message, add the data to the array
-			for channel = 1:handles.numChannels % Remove the DC offset
-				handles.data.normMatrix(channel,:) = handles.data.matrix(channel,:) - mean(handles.data.matrix(channel,:));
-			end
-			
+            sprintf('unpack: ')
+            toc
+            
+            tic
+            handles.data.normMatrix(:,handles.c-handles.nSamples+1:handles.c) = handles.data.matrix(:,handles.c-handles.nSamples+1:handles.c) - repmat(mean(handles.data.matrix(:,1:handles.c),2),[1 handles.nSamples]);            
+            sprintf('norm: ')
+            toc
+            
+            tic
 			if handles.plot % Real time plotting
-				handles = updatePlots(handles);
-			end
-
+                handles = updatePlots(handles);
+            end
+            sprintf('plot: ')
+            toc
 		end
 		guidata(hObject,handles)
-		pause(.02) % This can be made smaller, if it runs slow on the processing side
+		pause(.001) % This can be made smaller, if it runs slow on the processing side
 		handles = guidata(hObject);
 	end
 	end
@@ -164,65 +182,92 @@ end
 
 function handles = unpack(handles)
 	block = fread(handles.udp.h,1);
-	handles.blocks(end+1) = unpackBlock(block,handles.numChannels); % Unpack the UDP message
-	nSamples = size(handles.blocks(end).matrix,2);
-	handles.data.matrix(1:31,handles.c+1:handles.c+nSamples)=handles.blocks(end).matrix;
-	
-	t = handles.blocks(end).timeStamp-handles.blocks(1).timeStamp;
+	[block,valid] = unpackBlock(block,handles.numChannels); % Unpack the UDP message
+    if valid
+	handles.nSamples = size(block.matrix,2);
+        if (handles.c+handles.nSamples)>length(handles.data.times)  % Allocate another block of memory
+            handles.data.matrix(:,end+1:end+round(handles.plotWindow*handles.freq*5)) = zeros([handles.numChannels round(handles.plotWindow*handles.freq*5)]);
+            handles.data.normMatrix(:,end+1:end+round(handles.plotWindow*handles.freq*5)) = zeros([handles.numChannels round(handles.plotWindow*handles.freq*5)]);
+            handles.data.times(:,end+1:end+round(handles.plotWindow*handles.freq*5)) = zeros([1 round(handles.plotWindow*handles.freq*5)]);
+        end
+	handles.data.matrix(1:31,handles.c+1:handles.c+handles.nSamples)=block.matrix;
+	if handles.c==0
+        t=0;
+        handles.ti = block.timeStamp;
+    else
+        t = block.timeStamp-handles.ti;
+    end
 	if t==0
-		handles.data.times(1:nSamples) = [0:nSamples-1]./nSamples; % Don't know block period yet
-	elseif length(handles.blocks)==2
-		T = handles.blocks(end).timeStamp-handles.blocks(end-1).timeStamp; % Period of block update
+		T = 0.05; % guess
+        handles.data.times(1:handles.nSamples) = [0:handles.nSamples-1].*T./handles.nSamples; % Don't know block period yet
+	elseif length(block)==2
+		T = block.timeStamp-handles.block.timeStamp; % Period of block update
 		handles.data.times = handles.data.times*T; % Adjust the first vector to block period
-		handles.data.times(handles.c+1:handles.c+nSamples) = [0:nSamples-1].*T./nSamples+t;
+		handles.data.times(handles.c+1:handles.c+handles.nSamples) = [0:handles.nSamples-1].*T./handles.nSamples+t;
 	else
-		T = handles.blocks(end).timeStamp-handles.blocks(end-1).timeStamp; % Period of block update
-		handles.data.times(handles.c+1:handles.c+nSamples) = [0:nSamples-1].*T./nSamples+t;
+		T = block.timeStamp-handles.block.timeStamp; % Period of block update
+		handles.data.times(handles.c+1:handles.c+handles.nSamples) = [0:handles.nSamples-1].*T./handles.nSamples+t;
 	end
-	handles.c = handles.c+nSamples;
+	handles.c = handles.c+handles.nSamples;
+    handles.block = block;
+    handles.freq = handles.nSamples/(T);
+    end
 end
 
 function handles = updatePlots(handles)
-	axes(handles.axesChannels)
-	cla(handles.axesChannels)
-	range = max(max(abs(handles.data.normMatrix)));
-	counter = 0;
-	if handles.c>0
-	hold on
-	for channel = handles.plotSel
-		counter = counter+1;
-		if handles.c-handles.T < 0
-			plot(handles.data.times(1:handles.c),handles.data.normMatrix(channel,1:handles.c)+counter*range,'k')
-		else
-			plot(handles.data.times(handles.c-handles.T:handles.c),handles.data.normMatrix(channel,handles.c-handles.T:handles.c)+counter*range,'k')
-		end
-	end
-	hold off
-	handles.axesChannels.XTick	= 0:floor(handles.data.times(handles.c));
-	handles.axesChannels.XLim	= [handles.data.times(handles.c-handles.T), handles.data.times(handles.c)];
-		
-	% Fourier Transform
-	T = handles.data.times(handles.c)-handles.data.times(handles.c-1);
-	Fs = 1/T; % Sampling Frequency
-	f = Fs*(0:handles.T/2)/handles.T; % Frequcny list vector
-	for channel = handles.plotSel
-		handles.Y(channel,:) = fft(handles.data.normMatrix(channel,handles.c-handles.T:handles.c));
-	end
-	handles.Y = abs(handles.Y./handles.T);  % Make one-sided, real
-	handles.Y = handles.Y(:,1:handles.T/2+1);
-	handles.Y(:,2:end-1) = 2*handles.Y(:,2:end-1);
-	axes(handles.axesSpectra)
-	cla(handles.axesSpectra)
-	hold on
-	for channel = handles.plotSel
-		plot(f,handles.Y(channel,:))
-	end
-	hold off
-	end
-	handles.axesChannels.YLim		= [0, (length(handles.plotSel)+1).*(range+1)];
-	handles.axesChannels.YTick		= (1:length(handles.plotSel)).*(range+1);
+    temp = max(max(abs(handles.data.normMatrix)));
+    if temp>handles.range
+        handles.range = 1.6*temp;
+    end
+    %if handles.axesChannels.YLim ~= [0, (length(handles.plotSel)+1).*(handles.range)]; handles.axesChannels.YLim = [0, (length(handles.plotSel)+1).*(handles.range)];end
+    %if handles.axesChannels.YTick~= (1:length(handles.plotSel)).*(handles.range); handles.axesChannels.YTick = (1:length(handles.plotSel)).*(handles.range); end
+	%if handles.axesChannels.YTickLabel ~= num2str((handles.plotSel)');handles.axesChannels.YTickLabel = num2str((handles.plotSel)'); end
+	%if handles.axesChannels.XLim ~= [0, handles.plotWindow];handles.axesChannels.XLim = [0, handles.plotWindow]; end
+    %if size(handles.axesChannels.XTick) ~= size(0:0.5:floor(handles.plotWindow)); handles.axesChannels.XTick = 0:0.5:floor(handles.plotWindow);end
+    handles.axesChannels.YLim = [0, (length(handles.plotSel)+1).*(handles.range)];
+    handles.axesChannels.YTick = (1:length(handles.plotSel)).*(handles.range);
 	handles.axesChannels.YTickLabel = num2str((handles.plotSel)');
-	
+	%handles.axesChannels.XLim = [0, handles.plotWindow];
+    %handles.axesChannels.XTick = 0:0.5:floor(handles.plotWindow);
+
+	counter = 0;
+	if handles.c>1
+    for channel = handles.plotSel
+		counter = counter+1;
+        if handles.c > handles.plotWindow*handles.freq+1
+            handles.l(channel).YData(handles.p+1:handles.p+handles.nSamples) = handles.data.normMatrix(channel,handles.c-handles.nSamples+1:handles.c)+counter*handles.range;
+        else
+            if handles.p ==0
+            handles.l(channel) = line(nan, nan);
+            end
+            handles.l(channel).XData = handles.data.times(1:handles.c);
+            handles.l(channel).YData = handles.data.normMatrix(channel,1:handles.c)+counter*handles.range;
+            
+        end
+    end
+    handles.p = mod(handles.c,round(handles.plotWindow*handles.freq));
+	%{
+	if handles.c > handles.plotWindow	
+        % Fourier Transform
+        T = handles.data.times(handles.c)-handles.data.times(handles.c-1);
+        Fs = 1/T; % Sampling Frequency
+        f = Fs*(0:handles.plotWindow/2)/handles.plotWindow; % Frequcny list vector
+        for channel = handles.plotSel
+            handles.Y(channel,:) = fft(handles.data.normMatrix(channel,handles.c-handles.plotWindow:handles.c));
+        end
+        handles.Y = abs(handles.Y./handles.plotWindow);  % Make one-sided, real
+        handles.Y = handles.Y(:,1:handles.plotWindow/2+1);
+        handles.Y(:,2:end-1) = 2*handles.Y(:,2:end-1);
+        axes(handles.axesSpectra)
+        cla(handles.axesSpectra)
+        hold on
+        for channel = handles.plotSel
+            plot(f,handles.Y(channel,:))
+        end
+        hold off
+    end
+    %}
+    end
 end
 
 %%% Callbacks
@@ -281,13 +326,17 @@ else
 	handles.plotSel = temp-2;
 end
 handles = updatePlots(handles);
+guidata(hObject,handles)
 end
 
 function editWindow_Callback(hObject, eventdata, handles)
 % hObject    handle to editWindow (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-handles.T = str2double(get(hObject,'String'));
+handles.plotWindow = str2double(get(hObject,'String'));
+handles.axesChannels.XLim = [0, handles.plotWindow];
+handles.axesChannels.XTick = 0:0.5:floor(handles.plotWindow);
+handles = updatePlots(handles);
 % Hints: get(hObject,'String') returns contents of editWindow as text
 %         returns contents of editWindow as a double
 end
