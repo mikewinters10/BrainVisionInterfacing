@@ -1,4 +1,23 @@
 function varargout = BVinterface(varargin)
+% How to use this GUI:
+% (1) Click the 'connect' button (once finished, it should change to 'connected').
+% (2) Click the 'record' button. The GUI is now awaiting data over the UDP connection.
+% (3) Begin collecting data on the python driver.
+% (4) When finished, click the 'record' button again to stop reading the UDP connection.
+% (5) ** Before closing, click the 'connected' button to disconnect. **
+%		 If you don't, the port will remain bound and you must restart matlab entirely before you can connect again.
+%
+% (optional) Save the data to the \data\ folder by clicking the 'save' button.
+% (optional) Enable real-time plotting by toggling the 'plot' button. Do this before redocrding.
+% (optional) Select which channels to plot data from by selecting from the 'Channels to Plot' list.
+%			 This can be done before or after recording.
+% (optional) Change the number of samples used in the plots by editing the 'Plot Window' field, or by moving the slider.
+%		     This can be done before or after recording.
+
+% (future)	 Run a pre-written exprimental procedure by clicking the 'Start Test' button.
+%			 (This should also come with a list to select from, populated with experimental procedure files in a folder.)
+
+
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
 gui_State = struct('gui_Name',       mfilename, ...
