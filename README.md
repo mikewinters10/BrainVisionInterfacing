@@ -24,6 +24,6 @@ Matlab GUI for real-time data streaming, processing, and visualization.
 
 Figure binary file associated with BVinterface GUI, containing information about the positions/properties of the various elements in the GUI
 
-###data\
+###\data\
 
 Folder storing data files saved by the GUI. Files are named by the date/time when they are created.
