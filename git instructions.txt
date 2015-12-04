@@ -1,9 +1,0 @@
-Instructions for commiting to master:
-> git status
-> git add .     (adds everything you've done)
-> git commit -m "message about your code"
-> git push origin master
-
-Instructions for getting current code:
-> cd BrainVisionInterfacing
-> git pull origin master
