@@ -1,26 +1,19 @@
---UDP Object creation--
-h=udp('127.0.0.1',5005,'LocalPort',5005,'InputBufferSize',2097152,'InputDatagramPacketSize',65535);
-fopen(h)
-(stuff)
-fclose(h)
-
 --OSC MESSAGE INFO--
-Bytes per OSC message: 3,908
-Information sections are separated by 4 "space" bytes (value of 0)
+Bytes per OSC message: 3,908   (based on 25 time samples per block)
+
 OSC message layout:
-- address (ex. '/startup')
-- list of contents (ex. ',sfffff....fff' where 's' is string, 'f' is float, etc. - not sure what ',' is)
-- contents
+- Address String (ex. '/startup')
+- List of contents (ex. ',sfffff....fff' where 's' is string, 'f' is float, etc. - not sure what ',' is)
+- Contents
+* Information sections are separated by 4 "space" bytes (value of 0)
 
 Notes:
-- there is a single zero after the timestamp and before the first float
-- the number of floats contained, divided by 31, is the number of values recorded per channel per block (at the sampling rate this is 25)
-- the floats are Big-endian, e.g. they are ordered from most significant (large value changes) to least significant (small value changes)
-- each float is 4 bytes long
-- there is no ending information - the last byte is the last value for the last float
+- There is a single zero-byte at the end of a string (e.g. after the timestamp and before the first float for these messages)
+- The number of floats contained, divided by the number of channels (31), is the number of values recorded per channel per block (at the current sampling rate this is 25)
+- The floats are Big-endian (the bytes are ordered from most significant to least significant)
+- Each float is 4 bytes long (single-precision)
+- There is no ending information - the last bytes are the last item in the contents list
+- Sometimes the message might be cut short, i.e. the contents list is bigger than the actual contents. In this case, the informaiton is lost :(
 
-(other)
-*.pyc   in gitignore
-
-
+Also, matlab used for BCIs
 http://www.mathworks.com/company/newsletters/articles/the-brain-computer-interface-using-matlab-and-simulink-for-biosignal-acquisition-and-processing.html
