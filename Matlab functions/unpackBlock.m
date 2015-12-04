@@ -26,10 +26,10 @@ block = uint8(block+1-1); % convert remaining data (4-byte floats i.e. singles) 
 
 if numel(block)==numSamples*4 % Check that the message has not been truncated, i.e. the list matches the contents
 	valid= true;
-	block = reshape(block,[4,numSamples/(numChannels*4),numChannels]);
-	struc.matrix = single(zeros(numChannels,numSamples));
+	block = reshape(block,[4,numSamples/(numChannels),numChannels]);
+	struc.matrix = single(zeros(numChannels,numSamples/numSamples));
 	for channel = 1:numChannels
-		for sample = 1:numSamples
+		for sample = 1:(numSamples/numChannels)
 			struc.matrix(channel,sample) = typecast(fliplr(block(:,sample,channel)'),'single');
 		end
 	end

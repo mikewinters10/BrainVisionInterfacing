@@ -138,6 +138,9 @@ function record(hObject)
 	% Matlab throws a warning whenever the X and Y data vectors for a line object are not the same size
 	% For faster plotting, the program edits these directly, meaning whenver the lengths change the warnign will pop up once
 	% This is annoying, so it's turned off - be sure to turn this on again if debugging plotting problems
+    
+    warning('off','MATLAB:colon:nonIntegerIndex'); 
+    % Doing the fourier tranform throws this, but it still works?
 	
 	if h.udp.connected
 	while h.record
@@ -263,7 +266,7 @@ case {'Spectra'} %%% Frequency Plot
             h.Y(channel,1:numel(Y)) = Y;
         end
         h.Y = abs(h.Y./h.plotWindow);  % Make one-sided, real
-        h.Y = h.Y(:,1:h.plotWindow/2+1);
+        h.Y = h.Y(:,1:round(h.plotWindow/2));
         h.Y(:,2:end-1) = 2*h.Y(:,2:end-1);
         
         set(h.l.f,'XData',f);
